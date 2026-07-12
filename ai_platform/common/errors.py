@@ -18,3 +18,22 @@ class ValidationError(PlatformError):
 
 class RuntimeUnavailableError(PlatformError):
     """The Runtime backing the platform could not process the request."""
+
+
+class ProviderError(PlatformError):
+    """Base class for model provider failures (Anthropic, OpenAI, ...).
+    Lives in common/errors.py, not providers/, so it's on the same
+    transport-agnostic hierarchy the Gateway already knows how to map to
+    HTTP — a future Runtime can let these propagate unchanged."""
+
+
+class ProviderAuthError(ProviderError):
+    """The provider rejected our credentials."""
+
+
+class ProviderRateLimitError(ProviderError):
+    """The provider itself rate-limited or overloaded us."""
+
+
+class ProviderTimeoutError(ProviderError):
+    """The provider did not respond in time."""

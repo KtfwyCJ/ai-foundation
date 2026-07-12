@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 60
     rate_limit_window_seconds: int = 60
 
+    # Provider: Anthropic (Claude) credentials.
+    anthropic_api_key: str = ""
+    anthropic_default_model: str = "claude-sonnet-5"
+
     @property
     def api_key_set(self) -> set[str]:
         return {key.strip() for key in self.api_keys.split(",") if key.strip()}
