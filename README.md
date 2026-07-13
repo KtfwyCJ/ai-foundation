@@ -11,6 +11,7 @@ A Production-Inspired AI Platform Framework
 - `ai_platform/tools/` — Tool Registry: pluggable, model-callable tools
 - `ai_platform/memory/` — Conversation history persistence across requests
 - `ai_platform/tracing/` — Span-based observability over provider calls and tool executions
+- `ai_platform/evaluation/` — Offline eval harness: run test cases through any RuntimeClient and grade the responses
 
 See `engineer-tutorial/` for a deep-dive tutorial on each module.
 
