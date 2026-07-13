@@ -8,6 +8,8 @@ from ai_platform.providers.anthropic_provider import create_anthropic_provider
 from ai_platform.runtime.engine import RuntimeEngine
 from ai_platform.tools.builtin import CalculatorTool
 from ai_platform.tools.registry import ToolRegistry
+from ai_platform.tracing.in_memory import InMemoryTracer
+from ai_platform.tracing.interfaces import Tracer
 
 
 @lru_cache
@@ -28,9 +30,17 @@ def get_memory_store() -> MemoryStore:
 
 
 @lru_cache
+def get_tracer() -> Tracer:
+    """The one place the concrete Tracer backend is chosen. Swapping
+    InMemoryTracer for an OpenTelemetry/Datadog exporter later changes only
+    this function."""
+    return InMemoryTracer()
+
+
+@lru_cache
 def get_runtime_client() -> RuntimeClient:
     """The one place that wires a concrete Runtime implementation into the
     Gateway. Swapping the provider, or Runtime itself, changes only this
     function — no route or middleware code depends on the concrete type."""
     provider = create_anthropic_provider(get_settings())
-    return RuntimeEngine(provider, get_tool_registry(), get_memory_store())
+    return RuntimeEngine(provider, get_tool_registry(), get_memory_store(), get_tracer())

@@ -7,6 +7,7 @@ from ai_platform.providers.types import ProviderResponse, ToolCall
 from ai_platform.runtime.engine import RuntimeEngine
 from ai_platform.tools.builtin import CalculatorTool
 from ai_platform.tools.registry import ToolRegistry
+from ai_platform.tracing.in_memory import InMemoryTracer
 
 from .conftest import FakeModelProvider
 
@@ -249,3 +250,116 @@ async def test_handle_chat_does_not_persist_when_tool_loop_exceeded():
         await engine.handle_chat(request)
 
     assert await memory.load("conv-1") == []
+
+
+async def test_handle_chat_without_tracer_still_works(fake_provider_response):
+    provider = FakeModelProvider(response=fake_provider_response)
+    engine = RuntimeEngine(provider)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")])
+
+    response = await engine.handle_chat(request)
+
+    assert response.message.content == "hi there"
+
+
+async def test_handle_chat_records_a_provider_span(fake_provider_response):
+    provider = FakeModelProvider(response=fake_provider_response)
+    tracer = InMemoryTracer()
+    engine = RuntimeEngine(provider, tracer=tracer)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
+
+    await engine.handle_chat(request)
+
+    spans = await tracer.get_trace("conv-1")
+    assert len(spans) == 1
+    assert spans[0].name == "provider.complete"
+    assert spans[0].error is None
+    assert spans[0].attributes["input_tokens"] == 12
+    assert spans[0].attributes["output_tokens"] == 8
+    assert spans[0].duration_ms >= 0
+
+
+async def test_handle_chat_uses_a_generated_trace_id_when_no_conversation_id(fake_provider_response, monkeypatch):
+    import uuid
+
+    provider = FakeModelProvider(response=fake_provider_response)
+    tracer = InMemoryTracer()
+    engine = RuntimeEngine(provider, tracer=tracer)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")])
+    monkeypatch.setattr("ai_platform.runtime.engine.uuid.uuid4", lambda: "generated-id")
+
+    await engine.handle_chat(request)
+
+    spans = await tracer.get_trace("generated-id")
+    assert len(spans) == 1
+    assert spans[0].name == "provider.complete"
+
+
+async def test_handle_chat_records_a_span_per_tool_call():
+    tool_use = ToolUseBlock(id="call_1", name="calculator", input={"operation": "add", "a": 2, "b": 3})
+    tool_call_response = ProviderResponse(
+        message=ChatMessage(role="assistant", content=[tool_use]),
+        stop_reason="tool_use",
+        input_tokens=10,
+        output_tokens=5,
+        tool_calls=[ToolCall(id="call_1", name="calculator", input={"operation": "add", "a": 2, "b": 3})],
+    )
+    final_response = ProviderResponse(
+        message=ChatMessage(role="assistant", content="The answer is 5."),
+        stop_reason="end_turn",
+        input_tokens=15,
+        output_tokens=6,
+    )
+    provider = FakeModelProvider(responses=[tool_call_response, final_response])
+    registry = ToolRegistry()
+    registry.register(CalculatorTool())
+    tracer = InMemoryTracer()
+    engine = RuntimeEngine(provider, registry, tracer=tracer)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="what is 2 + 3?")], conversation_id="conv-1")
+
+    await engine.handle_chat(request)
+
+    spans = await tracer.get_trace("conv-1")
+    names = [span.name for span in spans]
+    assert names == ["provider.complete", "tool.execute", "provider.complete"]
+    assert spans[1].attributes["tool"] == "calculator"
+    assert spans[1].error is None
+
+
+async def test_handle_chat_records_an_error_span_when_provider_fails():
+    provider = FakeModelProvider(error=ProviderTimeoutError("boom"))
+    tracer = InMemoryTracer()
+    engine = RuntimeEngine(provider, tracer=tracer)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
+
+    with pytest.raises(ProviderTimeoutError):
+        await engine.handle_chat(request)
+
+    spans = await tracer.get_trace("conv-1")
+    assert len(spans) == 1
+    assert spans[0].name == "provider.complete"
+    assert spans[0].error == "boom"
+
+
+async def test_handle_chat_records_an_error_span_when_tool_not_found():
+    tool_use = ToolUseBlock(id="call_1", name="not_a_real_tool", input={})
+    response = ProviderResponse(
+        message=ChatMessage(role="assistant", content=[tool_use]),
+        stop_reason="tool_use",
+        input_tokens=10,
+        output_tokens=5,
+        tool_calls=[ToolCall(id="call_1", name="not_a_real_tool", input={})],
+    )
+    provider = FakeModelProvider(response=response)
+    tracer = InMemoryTracer()
+    engine = RuntimeEngine(provider, ToolRegistry(), tracer=tracer)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
+
+    with pytest.raises(ToolNotFoundError):
+        await engine.handle_chat(request)
+
+    spans = await tracer.get_trace("conv-1")
+    tool_spans = [span for span in spans if span.name == "tool.execute"]
+    assert len(tool_spans) == 1
+    assert tool_spans[0].attributes["tool"] == "not_a_real_tool"
+    assert "not_a_real_tool" in tool_spans[0].error

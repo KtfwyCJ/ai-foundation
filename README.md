@@ -5,8 +5,14 @@ A Production-Inspired AI Platform Framework
 ## Modules
 
 - `ai_platform/common/` — shared config, errors, schemas, interfaces
-- `ai_platform/api/` — Gateway: auth, rate limiting, routing (implemented)
-- `ai_platform/runtime/` — Agent loop / orchestrator (stub only, pending)
+- `ai_platform/api/` — Gateway: auth, rate limiting, routing
+- `ai_platform/providers/` — Model provider abstraction (Anthropic)
+- `ai_platform/runtime/` — Agent loop / orchestrator: provider + tools + memory + tracing
+- `ai_platform/tools/` — Tool Registry: pluggable, model-callable tools
+- `ai_platform/memory/` — Conversation history persistence across requests
+- `ai_platform/tracing/` — Span-based observability over provider calls and tool executions
+
+See `engineer-tutorial/` for a deep-dive tutorial on each module.
 
 ## Running the Gateway
 
