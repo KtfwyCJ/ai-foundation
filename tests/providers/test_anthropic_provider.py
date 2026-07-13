@@ -7,10 +7,10 @@ from ai_platform.common.errors import (
     ProviderRateLimitError,
     ProviderTimeoutError,
 )
-from ai_platform.common.schemas import ChatMessage
+from ai_platform.common.schemas import ChatMessage, ToolDefinition, ToolResultBlock, ToolUseBlock
 from ai_platform.providers.anthropic_provider import AnthropicProvider
 
-from .conftest import FakeAnthropicClient, build_status_error, build_timeout_error
+from .conftest import FakeAnthropicClient, FakeAnthropicResponse, FakeToolUseBlock, build_status_error, build_timeout_error
 
 
 async def test_complete_extracts_system_message_separately(fake_response):
@@ -83,3 +83,62 @@ async def test_generic_status_error_is_translated():
 
     with pytest.raises(ProviderError):
         await provider.complete([ChatMessage(role="user", content="hi")], model="claude-sonnet-5")
+
+
+async def test_complete_without_tools_omits_tools_kwarg(fake_response):
+    client = FakeAnthropicClient(response=fake_response)
+    provider = AnthropicProvider(client=client)
+
+    await provider.complete([ChatMessage(role="user", content="hi")], model="claude-sonnet-5")
+
+    assert "tools" not in client.messages.last_kwargs
+
+
+async def test_complete_translates_tool_definitions_to_anthropic_schema(fake_response):
+    client = FakeAnthropicClient(response=fake_response)
+    provider = AnthropicProvider(client=client)
+    tools = [ToolDefinition(name="calculator", description="does math", input_schema={"type": "object"})]
+
+    await provider.complete([ChatMessage(role="user", content="hi")], model="claude-sonnet-5", tools=tools)
+
+    assert client.messages.last_kwargs["tools"] == [
+        {"name": "calculator", "description": "does math", "input_schema": {"type": "object"}}
+    ]
+
+
+async def test_complete_parses_tool_use_block_into_tool_calls():
+    tool_use_block = FakeToolUseBlock(id="call_1", name="calculator", input={"operation": "add", "a": 1, "b": 2})
+    response = FakeAnthropicResponse(stop_reason="tool_use", content_blocks=[tool_use_block])
+    client = FakeAnthropicClient(response=response)
+    provider = AnthropicProvider(client=client)
+
+    result = await provider.complete([ChatMessage(role="user", content="what is 1+2?")], model="claude-sonnet-5")
+
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].id == "call_1"
+    assert result.tool_calls[0].name == "calculator"
+    assert result.tool_calls[0].input == {"operation": "add", "a": 1, "b": 2}
+    assert result.message.content == [ToolUseBlock(id="call_1", name="calculator", input={"operation": "add", "a": 1, "b": 2})]
+
+
+async def test_complete_sends_tool_result_block_back_to_anthropic():
+    client = FakeAnthropicClient(response=FakeAnthropicResponse())
+    provider = AnthropicProvider(client=client)
+    tool_use = ToolUseBlock(id="call_1", name="calculator", input={"operation": "add", "a": 1, "b": 2})
+    tool_result = ToolResultBlock(tool_use_id="call_1", content="3")
+    messages = [
+        ChatMessage(role="user", content="what is 1+2?"),
+        ChatMessage(role="assistant", content=[tool_use]),
+        ChatMessage(role="user", content=[tool_result]),
+    ]
+
+    await provider.complete(messages, model="claude-sonnet-5")
+
+    assert client.messages.last_kwargs["messages"][1] == {
+        "role": "assistant",
+        "content": [{"type": "tool_use", "id": "call_1", "name": "calculator", "input": {"operation": "add", "a": 1, "b": 2}}],
+    }
+    assert client.messages.last_kwargs["messages"][2] == {
+        "role": "user",
+        "content": [{"type": "tool_result", "tool_use_id": "call_1", "content": "3"}],
+    }

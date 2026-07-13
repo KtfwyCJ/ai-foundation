@@ -9,7 +9,9 @@ from ai_platform.common.errors import (
     ProviderRateLimitError,
     ProviderTimeoutError,
     RateLimitExceededError,
+    RuntimeToolLoopExceededError,
     RuntimeUnavailableError,
+    ToolNotFoundError,
     ValidationError,
 )
 
@@ -25,6 +27,8 @@ _STATUS_CODES: dict[type[PlatformError], int] = {
     ProviderRateLimitError: 503,  # the provider itself is throttling us
     ProviderTimeoutError: 504,
     ProviderError: 502,
+    ToolNotFoundError: 500,  # a tool we exposed to the model isn't actually registered
+    RuntimeToolLoopExceededError: 503,  # model never converged on a final answer
 }
 
 

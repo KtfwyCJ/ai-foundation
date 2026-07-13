@@ -1,6 +1,17 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ai_platform.common.schemas import ChatMessage
+
+
+class ToolCall(BaseModel):
+    """A single tool invocation the model requested, parsed out of a
+    ToolUseBlock. Kept as its own type (rather than making callers dig
+    through ProviderResponse.message.content) since checking "did the model
+    ask for a tool" is Runtime's main branch point after every completion."""
+
+    id: str
+    name: str
+    input: dict
 
 
 class ProviderResponse(BaseModel):
@@ -14,3 +25,4 @@ class ProviderResponse(BaseModel):
     stop_reason: str
     input_tokens: int
     output_tokens: int
+    tool_calls: list[ToolCall] = Field(default_factory=list)

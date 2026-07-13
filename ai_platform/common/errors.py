@@ -37,3 +37,12 @@ class ProviderRateLimitError(ProviderError):
 
 class ProviderTimeoutError(ProviderError):
     """The provider did not respond in time."""
+
+
+class ToolNotFoundError(PlatformError):
+    """Runtime (or the model) referenced a tool that isn't registered."""
+
+
+class RuntimeToolLoopExceededError(PlatformError):
+    """The tool-calling loop exceeded its iteration limit without the model
+    producing a final, non-tool-call answer."""

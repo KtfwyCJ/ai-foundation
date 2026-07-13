@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from ai_platform.common.schemas import ChatMessage
+from ai_platform.common.schemas import ChatMessage, ToolDefinition
 from ai_platform.providers.types import ProviderResponse
 
 
@@ -15,4 +15,5 @@ class ModelProvider(Protocol):
         *,
         model: str,
         max_tokens: int = 1024,
+        tools: list[ToolDefinition] | None = None,
     ) -> ProviderResponse: ...

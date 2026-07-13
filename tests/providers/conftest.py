@@ -8,6 +8,14 @@ class FakeContentBlock:
         self.text = text
 
 
+class FakeToolUseBlock:
+    def __init__(self, id: str, name: str, input: dict) -> None:
+        self.type = "tool_use"
+        self.id = id
+        self.name = name
+        self.input = input
+
+
 class FakeUsage:
     def __init__(self, input_tokens: int, output_tokens: int) -> None:
         self.input_tokens = input_tokens
@@ -24,8 +32,9 @@ class FakeAnthropicResponse:
         stop_reason: str = "end_turn",
         input_tokens: int = 10,
         output_tokens: int = 5,
+        content_blocks: list | None = None,
     ) -> None:
-        self.content = [FakeContentBlock(text)]
+        self.content = content_blocks if content_blocks is not None else [FakeContentBlock(text)]
         self.stop_reason = stop_reason
         self.usage = FakeUsage(input_tokens, output_tokens)
 
