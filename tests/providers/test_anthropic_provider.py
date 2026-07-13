@@ -7,8 +7,9 @@ from ai_platform.common.errors import (
     ProviderRateLimitError,
     ProviderTimeoutError,
 )
+from ai_platform.common.config import Settings
 from ai_platform.common.schemas import ChatMessage, ToolDefinition, ToolResultBlock, ToolUseBlock
-from ai_platform.providers.anthropic_provider import AnthropicProvider
+from ai_platform.providers.anthropic_provider import AnthropicProvider, create_anthropic_provider
 
 from .conftest import FakeAnthropicClient, FakeAnthropicResponse, FakeToolUseBlock, build_status_error, build_timeout_error
 
@@ -27,13 +28,16 @@ async def test_complete_extracts_system_message_separately(fake_response):
     assert client.messages.last_kwargs["messages"] == [{"role": "user", "content": "hi"}]
 
 
-async def test_complete_without_system_message_passes_none(fake_response):
+async def test_complete_without_system_message_omits_system_key(fake_response):
     client = FakeAnthropicClient(response=fake_response)
     provider = AnthropicProvider(client=client)
 
     await provider.complete([ChatMessage(role="user", content="hi")], model="claude-sonnet-5")
 
-    assert client.messages.last_kwargs["system"] is None
+    # Not `is None` — the key must be absent entirely, since the real SDK
+    # treats passing `system=None` as "send JSON null" (which the API
+    # rejects), not "omit this parameter."
+    assert "system" not in client.messages.last_kwargs
 
 
 async def test_complete_parses_response_into_provider_response(fake_response):
@@ -142,3 +146,18 @@ async def test_complete_sends_tool_result_block_back_to_anthropic():
         "role": "user",
         "content": [{"type": "tool_result", "tool_use_id": "call_1", "content": "3"}],
     }
+
+
+def test_create_anthropic_provider_raises_provider_auth_error_when_key_missing():
+    settings = Settings(anthropic_api_key="")
+
+    with pytest.raises(ProviderAuthError, match="AI_PLATFORM_ANTHROPIC_API_KEY"):
+        create_anthropic_provider(settings)
+
+
+def test_create_anthropic_provider_succeeds_when_key_present():
+    settings = Settings(anthropic_api_key="sk-test-key")
+
+    provider = create_anthropic_provider(settings)
+
+    assert isinstance(provider, AnthropicProvider)

@@ -80,9 +80,15 @@ class AnthropicProvider:
         request_kwargs: dict = dict(
             model=model,
             max_tokens=max_tokens,
-            system=system_prompt or None,
             messages=turns,
         )
+        # Omit `system` entirely rather than passing None: the SDK's own
+        # default for this parameter is its `Omit` sentinel (meaning "don't
+        # serialize this key"), not None — passing a literal None serializes
+        # to JSON `null`, which the API rejects against its `system: str |
+        # array` schema instead of treating it as "no system prompt."
+        if system_prompt:
+            request_kwargs["system"] = system_prompt
         if tools:
             request_kwargs["tools"] = [_tool_to_anthropic(tool) for tool in tools]
 
@@ -121,5 +127,13 @@ class AnthropicProvider:
 
 def create_anthropic_provider(settings: Settings) -> AnthropicProvider:
     """Production constructor — builds the real SDK client from config.
-    Tests instead construct AnthropicProvider directly with a fake client."""
+    Tests instead construct AnthropicProvider directly with a fake client.
+    Fails fast with the platform's own ProviderAuthError when no API key is
+    configured, rather than letting the Anthropic SDK's internal credential
+    check raise a raw TypeError the Gateway's error handler doesn't know
+    how to map."""
+    if not settings.anthropic_api_key:
+        raise ProviderAuthError(
+            "AI_PLATFORM_ANTHROPIC_API_KEY is not set — the Anthropic SDK has no credentials to call the API with"
+        )
     return AnthropicProvider(AsyncAnthropic(api_key=settings.anthropic_api_key))

@@ -53,6 +53,22 @@ and production evolution — not just what the code does.
 
 ```bash
 pip install -e ".[dev]"
+```
+
+Set a real Anthropic API key before starting the server — the `/v1/chat`
+route calls the real Anthropic API through `ai_platform/providers/`, so it
+needs credentials:
+
+```bash
+echo "AI_PLATFORM_ANTHROPIC_API_KEY=sk-ant-..." >> .env
+```
+
+(`Settings` in `ai_platform/common/config.py` auto-loads `.env`; you can
+instead `export AI_PLATFORM_ANTHROPIC_API_KEY=sk-ant-...` in your shell.
+Skipping this step doesn't hang or crash the server — every request to
+`/v1/chat` returns a clean `500 {"error": "ProviderAuthError", ...}` instead.)
+
+```bash
 uvicorn ai_platform.api.app:app --reload
 ```
 
@@ -64,8 +80,9 @@ curl -X POST localhost:8000/v1/chat \
 ```
 
 Configuration is environment-driven (`ai_platform/common/config.py`), prefixed
-`AI_PLATFORM_` — e.g. `AI_PLATFORM_ANTHROPIC_API_KEY`, `AI_PLATFORM_API_KEYS`.
-Set them in a `.env` file or export them before running.
+`AI_PLATFORM_` — e.g. `AI_PLATFORM_ANTHROPIC_API_KEY`, `AI_PLATFORM_API_KEYS`
+(comma-separated keys the Gateway itself accepts via `Authorization: Bearer`,
+independent of the Anthropic key above).
 
 ## Tests
 
