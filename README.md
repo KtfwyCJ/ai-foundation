@@ -89,6 +89,7 @@ including the alternatives considered and why they were rejected.
 | Tracing | `ai_platform/tracing/` | [06-tracing.md](engineer-tutorial/06-tracing.md) |
 | Evaluation | `ai_platform/evaluation/` | [07-evaluation.md](engineer-tutorial/07-evaluation.md) |
 | Deployment | `Dockerfile`, `docker-compose.yml`, `.github/workflows/` | [08-deployment.md](engineer-tutorial/08-deployment.md) |
+| CLI Client | `ai_platform/client/` | [09-cli-client.md](engineer-tutorial/09-cli-client.md) |
 
 ## Quickstart
 
@@ -247,13 +248,49 @@ never a raw stack trace.
   code or CI against a set of test cases (`EvalRunner`), not something an
   end user calls over HTTP.
 
+## CLI Chat Client
+
+A zero-dependency (stdlib-only) interactive terminal client ships alongside
+the server and is installed by the same `pip install -e .`:
+
+```bash
+ai-platform-chat
+```
+
+```
+Connected to http://localhost:8000 (conversation_id=...). Type 'exit' or Ctrl+C to quit.
+
+You: My favorite color is teal.
+Assistant: Nice choice! Teal is a great color...
+
+You: What is my favorite color?
+Assistant: Your favorite color is teal!
+
+You: exit
+Bye.
+```
+
+It talks to `POST /v1/chat` exactly like the `curl` examples above — it just
+generates one `conversation_id` for the session so you don't have to pass
+it yourself, and prints Gateway errors as a clean one-liner instead of raw
+JSON. Useful flags:
+
+```bash
+ai-platform-chat --url http://localhost:8000 --api-key dev-local-key \
+  --model claude-opus-4-8 --system "Reply concisely."
+```
+
+See [09-cli-client.md](engineer-tutorial/09-cli-client.md) for why it's
+built as a standalone HTTP caller with zero imports from the rest of
+`ai_platform/`.
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-69 tests across all modules, run against fakes (`FakeModelProvider`,
+71 tests across all modules, run against fakes (`FakeModelProvider`,
 `FakeRuntimeClient`, in-memory stores) — no real model calls required.
 
 ## Running with Docker
