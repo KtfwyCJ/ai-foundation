@@ -90,6 +90,7 @@ including the alternatives considered and why they were rejected.
 | Evaluation | `ai_platform/evaluation/` | [07-evaluation.md](engineer-tutorial/07-evaluation.md) |
 | Deployment | `Dockerfile`, `docker-compose.yml`, `.github/workflows/` | [08-deployment.md](engineer-tutorial/08-deployment.md) |
 | CLI Client | `ai_platform/client/` | [09-cli-client.md](engineer-tutorial/09-cli-client.md) |
+| Sandbox | `ai_platform/sandbox/` | [10-sandbox.md](engineer-tutorial/10-sandbox.md) |
 
 ## Quickstart
 
@@ -316,8 +317,12 @@ pull request to `main`.
 
 ## Status
 
-All planned modules are implemented, tested, and documented. Further work is
-evolutionary — see each tutorial's *Production Evolution* section for the
-concrete next steps (a second `ModelProvider`, a Redis-backed `MemoryStore`/
-`Tracer` for multi-replica deployments, an LLM-as-judge `Grader`, publishing
-the image to a registry).
+All nine originally planned modules are implemented, tested, and documented.
+A tenth, **Sandbox** (`ai_platform/sandbox/`), was added afterward to close a
+gap module 04 deliberately deferred: tool execution had no timeout or
+resource ceiling even though a tool call's arguments are chosen by the
+model — untrusted input by construction. Further work is evolutionary — see
+each tutorial's *Production Evolution* section for the concrete next steps (a
+second `ModelProvider`, a Redis-backed `MemoryStore`/`Tracer` for
+multi-replica deployments, an LLM-as-judge `Grader`, a container-based
+`Sandbox`, publishing the image to a registry).

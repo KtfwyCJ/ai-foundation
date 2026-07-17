@@ -11,6 +11,9 @@ from ai_platform.common.errors import (
     RateLimitExceededError,
     RuntimeToolLoopExceededError,
     RuntimeUnavailableError,
+    SandboxError,
+    SandboxResourceLimitError,
+    SandboxTimeoutError,
     ToolNotFoundError,
     ValidationError,
 )
@@ -29,6 +32,9 @@ _STATUS_CODES: dict[type[PlatformError], int] = {
     ProviderError: 502,
     ToolNotFoundError: 500,  # a tool we exposed to the model isn't actually registered
     RuntimeToolLoopExceededError: 503,  # model never converged on a final answer
+    SandboxTimeoutError: 504,
+    SandboxResourceLimitError: 500,  # tool's own limit was misconfigured, not the caller's fault
+    SandboxError: 500,
 }
 
 

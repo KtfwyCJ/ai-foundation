@@ -6,6 +6,7 @@ from ai_platform.common.schemas import ChatMessage, ChatRequest, ChatResponse, T
 from ai_platform.memory.interfaces import MemoryStore
 from ai_platform.providers.interfaces import ModelProvider
 from ai_platform.providers.types import ProviderResponse, ToolCall
+from ai_platform.sandbox.interfaces import Sandbox
 from ai_platform.tools.registry import ToolRegistry
 from ai_platform.tracing.interfaces import Tracer
 from ai_platform.tracing.types import Span
@@ -30,7 +31,11 @@ class RuntimeEngine:
     request. ProviderError is deliberately not caught here: it's already on
     the platform's PlatformError hierarchy and the Gateway's error handler
     maps it to HTTP by type, so it propagates unchanged rather than being
-    re-wrapped."""
+    re-wrapped. When a Sandbox is present, tool execution is routed through
+    it instead of calling Tool.execute directly — a model chooses a tool
+    call's arguments, so that call is untrusted input, and the Sandbox is
+    what enforces a timeout and memory ceiling on it. Absent a Sandbox,
+    behavior is unchanged from before Sandbox existed."""
 
     def __init__(
         self,
@@ -38,11 +43,13 @@ class RuntimeEngine:
         tools: ToolRegistry | None = None,
         memory: MemoryStore | None = None,
         tracer: Tracer | None = None,
+        sandbox: Sandbox | None = None,
     ) -> None:
         self._provider = provider
         self._tools = tools or ToolRegistry()
         self._memory = memory
         self._tracer = tracer
+        self._sandbox = sandbox
 
     async def handle_chat(self, request: ChatRequest) -> ChatResponse:
         trace_id = request.conversation_id or str(uuid.uuid4())
@@ -113,7 +120,10 @@ class RuntimeEngine:
             start = time.monotonic()
             try:
                 tool = self._tools.get(call.name)
-                output = await tool.execute(**call.input)
+                if self._sandbox:
+                    output = (await self._sandbox.run(tool, call.input)).output
+                else:
+                    output = await tool.execute(**call.input)
             except Exception as exc:
                 await self._record_span(trace_id, "tool.execute", start, {"tool": call.name}, error=str(exc))
                 raise

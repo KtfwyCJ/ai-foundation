@@ -5,11 +5,26 @@ from ai_platform.common.schemas import ChatMessage, ChatRequest, ToolResultBlock
 from ai_platform.memory.in_memory import InMemoryStore
 from ai_platform.providers.types import ProviderResponse, ToolCall
 from ai_platform.runtime.engine import RuntimeEngine
+from ai_platform.sandbox.types import SandboxResult
 from ai_platform.tools.builtin import CalculatorTool
 from ai_platform.tools.registry import ToolRegistry
 from ai_platform.tracing.in_memory import InMemoryTracer
 
 from .conftest import FakeModelProvider
+
+
+class FakeSandbox:
+    """Stands in for a Sandbox — records every tool passed to it and
+    returns a scripted SandboxResult, so RuntimeEngine's routing decision
+    (sandbox present vs absent) can be tested without a real subprocess."""
+
+    def __init__(self, output: str = "sandboxed-5") -> None:
+        self._output = output
+        self.calls: list[tuple[object, dict]] = []
+
+    async def run(self, tool, kwargs: dict) -> SandboxResult:
+        self.calls.append((tool, kwargs))
+        return SandboxResult(output=self._output, duration_ms=1.0)
 
 
 async def test_handle_chat_returns_providers_message(fake_provider_response):
@@ -339,6 +354,41 @@ async def test_handle_chat_records_an_error_span_when_provider_fails():
     assert len(spans) == 1
     assert spans[0].name == "provider.complete"
     assert spans[0].error == "boom"
+
+
+async def test_handle_chat_routes_tool_execution_through_sandbox_when_present():
+    tool_use = ToolUseBlock(id="call_1", name="calculator", input={"operation": "add", "a": 2, "b": 3})
+    tool_call_response = ProviderResponse(
+        message=ChatMessage(role="assistant", content=[tool_use]),
+        stop_reason="tool_use",
+        input_tokens=10,
+        output_tokens=5,
+        tool_calls=[ToolCall(id="call_1", name="calculator", input={"operation": "add", "a": 2, "b": 3})],
+    )
+    final_response = ProviderResponse(
+        message=ChatMessage(role="assistant", content="The answer is 5."),
+        stop_reason="end_turn",
+        input_tokens=15,
+        output_tokens=6,
+    )
+    provider = FakeModelProvider(responses=[tool_call_response, final_response])
+    registry = ToolRegistry()
+    registry.register(CalculatorTool())
+    sandbox = FakeSandbox(output="sandboxed-5")
+    engine = RuntimeEngine(provider, registry, sandbox=sandbox)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="what is 2 + 3?")])
+
+    response = await engine.handle_chat(request)
+
+    assert response.message.content == "The answer is 5."
+    assert len(sandbox.calls) == 1
+    called_tool, called_kwargs = sandbox.calls[0]
+    assert called_tool.definition.name == "calculator"
+    assert called_kwargs == {"operation": "add", "a": 2, "b": 3}
+
+    second_call_messages = provider.calls[1]["messages"]
+    tool_result_message = second_call_messages[-1]
+    assert tool_result_message.content == [ToolResultBlock(tool_use_id="call_1", content="sandboxed-5")]
 
 
 async def test_handle_chat_records_an_error_span_when_tool_not_found():

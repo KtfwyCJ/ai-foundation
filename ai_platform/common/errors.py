@@ -46,3 +46,17 @@ class ToolNotFoundError(PlatformError):
 class RuntimeToolLoopExceededError(PlatformError):
     """The tool-calling loop exceeded its iteration limit without the model
     producing a final, non-tool-call answer."""
+
+
+class SandboxError(PlatformError):
+    """Base class for sandboxed tool-execution failures. A model chooses a
+    tool call's arguments, so these represent the sandbox's enforcement
+    boundary tripping, not a bug in the tool itself."""
+
+
+class SandboxTimeoutError(SandboxError):
+    """A sandboxed tool call did not complete within its wall-clock timeout."""
+
+
+class SandboxResourceLimitError(SandboxError):
+    """A sandboxed tool call exceeded its memory ceiling."""
