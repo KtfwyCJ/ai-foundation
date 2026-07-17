@@ -154,7 +154,7 @@ The scaling challenge here is almost entirely UX, not architecture — the HTTP 
 - Let one failed operation degrade gracefully (print an error, keep the loop running) rather than terminating an entire interactive session.
 - Verify a client by actually running it against a live server end-to-end (multi-turn session, a deliberately-broken session) — not only by unit-testing its internal request-building logic in isolation.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - Why a well-designed HTTP API should be usable by a client that has no access to server source code — the contract (request/response schema, auth, error shape) is the whole interface.

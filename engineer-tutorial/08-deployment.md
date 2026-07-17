@@ -186,7 +186,7 @@ The scaling challenge here is almost entirely external to the application code i
 - Verify a deployment artifact by actually running it (build → run → hit the real endpoints → check health), not just by confirming the build step exits zero.
 - Run the full test suite in CI on every push/PR — a test suite that isn't automatically enforced isn't really a gate.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - Why multi-stage Docker builds exist and what problem they solve versus a single-stage build.

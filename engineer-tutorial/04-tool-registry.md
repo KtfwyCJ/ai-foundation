@@ -173,7 +173,7 @@ The scaling challenge here is trust boundary, not state or scope: v0.1's one too
 - Treat a tool's schema as a contract worth writing carefully — it's the interface the model programs against, same as any documented API.
 - Test orchestration logic (the loop) against fakes that can script multi-step scenarios, independent of testing the translation logic (Provider) or the tool's own behavior.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - What "function calling" / "tool use" means for an LLM API, and the two-step round trip it requires (model requests a call → caller executes and returns a result).

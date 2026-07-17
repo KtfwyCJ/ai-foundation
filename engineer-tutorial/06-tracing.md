@@ -169,7 +169,7 @@ The scaling challenge here is volume and export, not the data model — `Span` a
 - Record spans on the failure path too, with the error captured on the span — then let the original exception propagate unchanged.
 - Resist adding span-kind-specific typed fields or aggregation logic until a real consumer needs them.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - What a "span" and a "trace" are, and why they're the standard unit of observability for multi-step request processing (this concept predates LLM platforms — it's core distributed-tracing vocabulary).

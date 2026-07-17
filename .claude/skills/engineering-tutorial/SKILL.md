@@ -1,6 +1,6 @@
 ---
 name: engineering-tutorial
-description: To summarize, explain, review, or deeply understand a completed module or feature, the objective is to transform an implementation into an engineering tutorial that teaches software architecture, design rationale, production considerations, and interview knowledge.
+description: To summarize, explain, review, or deeply understand a completed module or feature, the objective is to transform an implementation into an engineering tutorial that teaches software architecture, design rationale, production considerations, and Knowledge.
 license: MIT
 ---
 
@@ -12,7 +12,7 @@ Use this skill whenever the user asks to summarize, explain, review, or deeply u
 
 The objective is NOT to summarize code.
 
-The objective is to transform an implementation into an engineering tutorial that teaches software architecture, design rationale, production considerations, and interview knowledge.
+The objective is to transform an implementation into an engineering tutorial that teaches software architecture, design rationale, production considerations, and Knowledge.
 
 This tutorial should help a software engineer truly understand WHY the system is designed this way.
 
@@ -224,7 +224,7 @@ Summarize production best practices.
 
 ---
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 Assume the reader is preparing for AI Engineer interviews.
 

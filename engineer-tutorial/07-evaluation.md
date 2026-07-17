@@ -171,7 +171,7 @@ The scaling challenge here is grading quality and dataset governance, not the ha
 - Report evaluation as data (`EvalSummary`), and let the caller decide what policy — a CI threshold, a dashboard, a human review — to apply to it.
 - Don't build a grading strategy more sophisticated than the current dataset and use case justify; start deterministic, add model-graded evaluation once there's a rubric worth encoding.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - The difference between unit testing (code correctness against scripted dependencies), integration testing (does it work against a real backend), and evaluation (is the *output* good) — and why LLM systems specifically need the third category that traditional software often doesn't.

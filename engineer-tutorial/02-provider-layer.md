@@ -151,7 +151,7 @@ The scaling challenge here isn't state (unlike the Gateway's rate limiter) — i
 - Keep the generic request/response types intentionally minimal until a second implementation proves what actually needs to be generic.
 - Reuse the platform's existing exception hierarchy (`common/errors.py`) instead of inventing a parallel one per module — it's what lets the Gateway's error mapping stay a single, complete table.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - Why an adapter/facade pattern is used to unify multiple third-party APIs behind one interface.

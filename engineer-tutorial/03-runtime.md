@@ -157,7 +157,7 @@ The scaling challenge here is scope, not state (unlike the Gateway's rate limite
 - Ship the thinnest correct composition first; let real requirements (not anticipated ones) drive when tool-calling, memory, or routing get added.
 - Keep the module under test with fakes at every layer (`FakeModelProvider` here, `FakeRuntimeClient` at the Gateway) so each module's tests fail only for reasons that module actually owns.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - Why an orchestration layer (Runtime) is kept separate from both the API boundary (Gateway) and the vendor abstraction (Provider) — three different concerns, three different reasons to change.

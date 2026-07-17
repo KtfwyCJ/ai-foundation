@@ -188,7 +188,7 @@ The key scaling challenge at each step is state: v0.1's rate limiter and API-key
 - Key rate limits and quotas by authenticated identity, never by raw IP alone.
 - Design the external request/response schema to be stable even as internal implementation changes underneath it.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - What an API Gateway does: authentication, rate limiting, request routing, response shaping.

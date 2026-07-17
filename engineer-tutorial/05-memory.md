@@ -175,7 +175,7 @@ The scaling challenge here is the same one flagged for the Gateway's rate limite
 - Only persist state from a request that actually succeeded — a partially-completed, failed operation shouldn't leave a corrupt or confusing partial record behind.
 - When a test double records a mutable argument, decide explicitly whether it needs to snapshot (copy) that argument — don't assume reference semantics are safe by default.
 
-## 14. Interview Knowledge
+## 14. Knowledge
 
 **Must Know**
 - Why session/conversation state is kept behind a storage interface rather than hardcoded to a specific backend — the Dependency Inversion pattern applied a fourth time in this platform.
