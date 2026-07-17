@@ -11,7 +11,6 @@ from ai_platform.sandbox.subprocess_sandbox import SubprocessSandbox
 from ai_platform.tools.builtin import CalculatorTool
 from ai_platform.tools.registry import ToolRegistry
 from ai_platform.tracing.in_memory import InMemoryTracer
-from ai_platform.tracing.interfaces import Tracer
 
 
 @lru_cache
@@ -32,10 +31,14 @@ def get_memory_store() -> MemoryStore:
 
 
 @lru_cache
-def get_tracer() -> Tracer:
+def get_tracer() -> InMemoryTracer:
     """The one place the concrete Tracer backend is chosen. Swapping
     InMemoryTracer for an OpenTelemetry/Datadog exporter later changes only
-    this function."""
+    this function. Returns the concrete InMemoryTracer (not the Tracer
+    protocol) because the trace-viewer route needs get_trace(), a
+    query capability InMemoryTracer has but Tracer deliberately doesn't
+    declare — Tracer stays a pure write-only sink so a future export-based
+    backend (OpenTelemetry) can still satisfy it."""
     return InMemoryTracer()
 
 

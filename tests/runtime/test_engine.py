@@ -283,8 +283,9 @@ async def test_handle_chat_records_a_provider_span(fake_provider_response):
     engine = RuntimeEngine(provider, tracer=tracer)
     request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
 
-    await engine.handle_chat(request)
+    response = await engine.handle_chat(request)
 
+    assert response.trace_id == "conv-1"
     spans = await tracer.get_trace("conv-1")
     assert len(spans) == 1
     assert spans[0].name == "provider.complete"
@@ -303,8 +304,9 @@ async def test_handle_chat_uses_a_generated_trace_id_when_no_conversation_id(fak
     request = ChatRequest(messages=[ChatMessage(role="user", content="hi")])
     monkeypatch.setattr("ai_platform.runtime.engine.uuid.uuid4", lambda: "generated-id")
 
-    await engine.handle_chat(request)
+    response = await engine.handle_chat(request)
 
+    assert response.trace_id == "generated-id"
     spans = await tracer.get_trace("generated-id")
     assert len(spans) == 1
     assert spans[0].name == "provider.complete"

@@ -60,3 +60,7 @@ class SandboxTimeoutError(SandboxError):
 
 class SandboxResourceLimitError(SandboxError):
     """A sandboxed tool call exceeded its memory ceiling."""
+
+
+class TraceNotFoundError(PlatformError):
+    """No spans have been recorded under the requested trace_id."""

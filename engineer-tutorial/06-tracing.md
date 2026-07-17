@@ -6,7 +6,7 @@
 
 Every module built so far makes Runtime *do* more — call a real model, call tools, remember conversations. None of them make Runtime *observable*. Until this module existed, a request that took 8 seconds and a request that took 800ms looked identical from the outside; a `ProviderResponse` has carried `input_tokens`/`output_tokens` since the Provider module, and nothing has ever read them. If a request failed, the only signal was the exception that propagated to the Gateway's error handler — there was no record of *which* step failed, *how many* provider calls or tool executions happened first, or what any of them cost.
 
-Tracing closes that gap. It defines a `Tracer` protocol and a `Span` — one unit of recorded work (a provider call or a tool execution) — and makes `RuntimeEngine` record a span around every one of those calls, tagged with a `trace_id` that groups everything that happened on one request or conversation. `InMemoryTracer` is the v0.1 sink; the interface is what lets it become a real backend (OpenTelemetry, Datadog, Langfuse) without touching `RuntimeEngine` again.
+Tracing closes that gap. It defines a `Tracer` protocol and a `Span` — one unit of recorded work (a provider call or a tool execution) — and makes `RuntimeEngine` record a span around every one of those calls, tagged with a `trace_id` that groups everything that happened on one request or conversation. `InMemoryTracer` is the v0.1 sink; the interface is what lets it become a real backend (OpenTelemetry, Datadog, Langfuse) without touching `RuntimeEngine` again. `ChatResponse.trace_id` and `GET /v1/traces/{trace_id}` (added after this module's initial version) close the last gap: without them, spans were being recorded but there was no way for a caller — or a developer poking at the API — to ever retrieve them.
 
 ## 2. The Problem
 
@@ -54,6 +54,13 @@ This is the same shape decision this platform has made three times already (`Mod
       ┌─────────────────────────────┐
       │   InMemoryTracer                │   ai_platform/tracing/in_memory.py
       │   { trace_id: [Span, ...] }     │
+      │   record(span) / get_trace(id)  │
+      └───────────────┬─────────────┘
+                       │ read by (concrete type, not the Tracer protocol)
+                       ▼
+      ┌─────────────────────────────┐
+      │   GET /v1/traces/{trace_id}     │   ai_platform/api/routes/traces.py
+      │   → tracer.get_trace(trace_id)  │
       └─────────────────────────────┘
 
       ┌─────────────────────────────┐
@@ -64,6 +71,8 @@ This is the same shape decision this platform has made three times already (`Mod
 ```
 
 Upstream: `RuntimeEngine` holds an optional `Tracer` reference (constructor-injected, same DI pattern as `ModelProvider`/`ToolRegistry`/`MemoryStore`), and is the *only* module that ever constructs a `Span` — Tracing itself has no notion of "provider" or "tool," those are just string names `RuntimeEngine` chooses. Downstream: nothing — `InMemoryTracer` is a leaf, just like `InMemoryStore`. Sideways: unlike Memory, Tracing is unconditionally optional — `tracer: Tracer | None = None` — and every call site checks `if not self._tracer: return` before doing any work, so a Runtime wired without a tracer pays zero cost and behaves exactly as it did before this module existed.
+
+**Reading a trace back out** (`GET /v1/traces/{trace_id}`) is a Gateway concern, not a Tracing one — it lives in `ai_platform/api/routes/traces.py`, not in `ai_platform/tracing/`. It depends on the *concrete* `InMemoryTracer` returned by `ai_platform/api/dependencies.py`'s `get_tracer()`, not the `Tracer` protocol, because `get_trace()` is a query capability `InMemoryTracer` happens to have and `Tracer` deliberately doesn't declare (see Design Decisions below). `ChatResponse.trace_id` is what makes a `trace_id` discoverable at all — `RuntimeEngine` already computed it internally but discarded it before this was added.
 
 ## 6. Request Flow
 
@@ -77,6 +86,7 @@ Continuing the tool-calling example from the Tool Registry tutorial, now with a 
 6. **If a provider call raises** (e.g. `ProviderTimeoutError`), `self._complete` still records a `"provider.complete"` span — with `error=str(exc)` and no token attributes, since none exist — and then re-raises the original exception unchanged, so the Gateway's existing error-to-HTTP mapping is untouched.
 7. **If a tool call raises** (an unregistered tool, or the tool's own code), `self._run_tool_calls` records a `"tool.execute"` span with the error before re-raising — so a failed request still leaves behind a trace explaining what was attempted.
 8. **After the request**, `await tracer.get_trace(trace_id)` (on `InMemoryTracer`) returns every span recorded for that id, in order — the full timeline of one request or, if `conversation_id` was reused, one conversation.
+9. **Outside the process**, the caller reads `trace_id` off the `ChatResponse` it just got back and calls `GET /v1/traces/{trace_id}` (same API key as `/v1/chat`, no rate limit) to retrieve that same timeline as JSON — `{"trace_id": ..., "spans": [...]}` — or a 404 if nothing was ever recorded under that id.
 
 ## 7. Design Decisions
 
@@ -91,6 +101,9 @@ A trace's main value is diagnosing what went wrong — recording nothing on fail
 
 **Why is `Tracer` fully optional (`tracer: Tracer | None = None`) rather than defaulting to an always-present no-op tracer?**
 Both work; a "null object" `NoOpTracer` would remove the `if not self._tracer: return` checks scattered through `RuntimeEngine`. This module chose the explicit `None` check for consistency with `MemoryStore`, which made the identical choice for the identical reason (`if request.conversation_id and self._memory`) — the platform already has one established pattern for "this dependency is optional," and introducing a second pattern (the null-object sink) for the same kind of optionality would be inconsistency without a real benefit.
+
+**Why does `GET /v1/traces/{trace_id}` depend on the concrete `InMemoryTracer` class instead of the `Tracer` protocol?**
+`Tracer` declares one method, `record()`, on purpose — it's a pure write-only sink so a future OpenTelemetry-backed implementation (which exports spans to a collector, and doesn't naturally support pulling them back out in-process) can satisfy it without also having to fake a query API it doesn't really have. `get_trace()` is real, but it's an `InMemoryTracer`-specific capability, not a `Tracer` one. Rather than add `get_trace()` to the protocol (which would force every future backend to implement pull-based queries) or invent a second protocol just for this one v0.1 debug route, `ai_platform/api/dependencies.py`'s `get_tracer()` returns the concrete `InMemoryTracer` type, and the route depends on that directly. This is a deliberate, narrow exception to "depend on the interface only" — acceptable here because the route only exists to expose `InMemoryTracer`'s specific in-process storage, and the moment a real exporter replaces it, this route (and the exception) would need to be rethought anyway, not quietly kept working through a widened interface.
 
 **Why `attributes: dict` (untyped) instead of a strongly-typed field per span kind (e.g. `ProviderSpan`, `ToolSpan` subclasses)?**
 There are exactly two span kinds today (`provider.complete`, `tool.execute`) with different attribute shapes, and no consumer yet that needs to do more than read attributes back for display or debugging (`get_trace()` output, or a future Evaluation harness). A typed hierarchy is exactly the kind of "design ahead of the second real use case" this platform has repeatedly deferred (see the Provider tutorial's single-vendor decision, or the Tool Registry's single hardcoded iteration cap) — worth revisiting the moment a consumer needs to do type-safe things with span-specific fields.
@@ -117,7 +130,9 @@ v0.1 (this module)
   one span per provider call and per tool call
   in-memory, single-process, unbounded storage
   no sampling — every call traced, always
-  no export — spans only readable via get_trace() in-process
+  no export — spans only readable via get_trace(), now reachable from
+    outside the process through GET /v1/traces/{trace_id}, but still just
+    an in-process dict behind that route, not a real export/collector path
         │
         ▼
 v0.2
@@ -193,6 +208,7 @@ The scaling challenge here is volume and export, not the data model — `Span` a
 3. `trace_id` is `request.conversation_id` when present (grouping a whole conversation's spans together) or a generated id otherwise — chosen by `RuntimeEngine`, never by the sink.
 4. Spans are recorded on both success and failure paths — the error case is where a trace is most valuable, and the original exception always propagates unchanged regardless of whether tracing succeeded.
 5. `ProviderResponse.input_tokens`/`output_tokens`, unused since the Provider module, are now captured on every `"provider.complete"` span — the concrete gap this module was built to close, and the foundation cost accounting and Evaluation will build on next.
+6. Recording spans and being able to retrieve them are two different milestones — `ChatResponse.trace_id` plus `GET /v1/traces/{trace_id}` is what turned "spans exist somewhere in memory" into "a caller can actually see what happened," and that read path deliberately depends on the concrete `InMemoryTracer`, not the `Tracer` protocol, to keep the protocol itself export-shaped rather than query-shaped.
 
 ## Further Reading
 

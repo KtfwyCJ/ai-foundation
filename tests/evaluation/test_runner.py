@@ -14,8 +14,8 @@ def _case(case_id: str, expected: str) -> EvalCase:
 async def test_run_grades_each_case_against_its_response():
     runtime = FakeRuntimeClient(
         responses=[
-            ChatResponse(message=ChatMessage(role="assistant", content="5"), model="claude-sonnet-5"),
-            ChatResponse(message=ChatMessage(role="assistant", content="wrong"), model="claude-sonnet-5"),
+            ChatResponse(message=ChatMessage(role="assistant", content="5"), model="claude-sonnet-5", trace_id="trace-1"),
+            ChatResponse(message=ChatMessage(role="assistant", content="wrong"), model="claude-sonnet-5", trace_id="trace-1"),
         ]
     )
     runner = EvalRunner(runtime, ContainsGrader())
@@ -41,7 +41,7 @@ async def test_run_records_an_error_result_when_runtime_raises():
 
 async def test_run_passes_each_cases_messages_and_model_to_runtime():
     runtime = FakeRuntimeClient(
-        responses=[ChatResponse(message=ChatMessage(role="assistant", content="5"), model="claude-opus-4-8")]
+        responses=[ChatResponse(message=ChatMessage(role="assistant", content="5"), model="claude-opus-4-8", trace_id="trace-1")]
     )
     runner = EvalRunner(runtime, ContainsGrader())
     case = EvalCase(
@@ -60,8 +60,8 @@ async def test_run_passes_each_cases_messages_and_model_to_runtime():
 async def test_summarize_computes_pass_fail_error_counts_and_rate():
     runtime = FakeRuntimeClient(
         responses=[
-            ChatResponse(message=ChatMessage(role="assistant", content="5"), model="claude-sonnet-5"),
-            ChatResponse(message=ChatMessage(role="assistant", content="wrong"), model="claude-sonnet-5"),
+            ChatResponse(message=ChatMessage(role="assistant", content="5"), model="claude-sonnet-5", trace_id="trace-1"),
+            ChatResponse(message=ChatMessage(role="assistant", content="wrong"), model="claude-sonnet-5", trace_id="trace-1"),
         ],
         errors={2: ProviderTimeoutError("boom")},
     )

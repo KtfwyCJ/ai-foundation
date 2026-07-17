@@ -70,7 +70,7 @@ class RuntimeEngine:
             if not result.tool_calls:
                 messages.append(result.message)
                 await self._persist_new_turns(request, history, messages)
-                return ChatResponse(message=result.message, model=request.model)
+                return ChatResponse(message=result.message, model=request.model, trace_id=trace_id)
 
             messages.append(result.message)
             messages.append(await self._run_tool_calls(trace_id, result.tool_calls))

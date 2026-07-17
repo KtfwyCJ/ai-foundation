@@ -15,6 +15,7 @@ from ai_platform.common.errors import (
     SandboxResourceLimitError,
     SandboxTimeoutError,
     ToolNotFoundError,
+    TraceNotFoundError,
     ValidationError,
 )
 
@@ -35,6 +36,7 @@ _STATUS_CODES: dict[type[PlatformError], int] = {
     SandboxTimeoutError: 504,
     SandboxResourceLimitError: 500,  # tool's own limit was misconfigured, not the caller's fault
     SandboxError: 500,
+    TraceNotFoundError: 404,
 }
 
 

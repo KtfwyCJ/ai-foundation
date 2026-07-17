@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     message: ChatMessage
     model: str
+    trace_id: str
 
 
 class ToolDefinition(BaseModel):
