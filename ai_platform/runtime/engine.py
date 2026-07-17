@@ -4,6 +4,7 @@ import uuid
 from ai_platform.common.errors import RuntimeToolLoopExceededError
 from ai_platform.common.schemas import ChatMessage, ChatRequest, ChatResponse, ToolDefinition, ToolResultBlock
 from ai_platform.memory.interfaces import MemoryStore
+from ai_platform.planning.interfaces import Planner
 from ai_platform.providers.interfaces import ModelProvider
 from ai_platform.providers.types import ProviderResponse, ToolCall
 from ai_platform.sandbox.interfaces import Sandbox
@@ -35,7 +36,13 @@ class RuntimeEngine:
     it instead of calling Tool.execute directly — a model chooses a tool
     call's arguments, so that call is untrusted input, and the Sandbox is
     what enforces a timeout and memory ceiling on it. Absent a Sandbox,
-    behavior is unchanged from before Sandbox existed."""
+    behavior is unchanged from before Sandbox existed. When a Planner is
+    present, it's asked once per request — before the tool loop starts — to
+    produce a Plan, which is recorded as a "planner.plan" Span and otherwise
+    ignored: v0.1 is observational only, so the reactive tool loop below
+    runs exactly as it would without a Planner, and a Planner failure is
+    swallowed (recorded with an error, not re-raised) rather than failing
+    the request it was only ever meant to describe."""
 
     def __init__(
         self,
@@ -44,12 +51,14 @@ class RuntimeEngine:
         memory: MemoryStore | None = None,
         tracer: Tracer | None = None,
         sandbox: Sandbox | None = None,
+        planner: Planner | None = None,
     ) -> None:
         self._provider = provider
         self._tools = tools or ToolRegistry()
         self._memory = memory
         self._tracer = tracer
         self._sandbox = sandbox
+        self._planner = planner
 
     async def handle_chat(self, request: ChatRequest) -> ChatResponse:
         trace_id = request.conversation_id or str(uuid.uuid4())
@@ -59,6 +68,9 @@ class RuntimeEngine:
 
         messages = history + list(request.messages)
         tool_definitions = self._tools.definitions()
+
+        if self._planner:
+            await self._plan(trace_id, request, tool_definitions)
 
         for _ in range(_MAX_TOOL_ITERATIONS):
             # Pass a snapshot: messages is mutated after this call (tool
@@ -104,6 +116,28 @@ class RuntimeEngine:
             },
         )
         return result
+
+    async def _plan(self, trace_id: str, request: ChatRequest, tools: list[ToolDefinition]) -> None:
+        start = time.monotonic()
+        try:
+            plan = await self._planner.plan(request, tools)
+        except Exception as exc:
+            # Unlike _complete/_run_tool_calls, this does not re-raise: a
+            # Planner is observational-only, so a planning failure must not
+            # break the real request it was only ever meant to describe.
+            await self._record_span(trace_id, "planner.plan", start, {}, error=str(exc))
+            return
+        await self._record_span(
+            trace_id,
+            "planner.plan",
+            start,
+            {
+                "step_count": len(plan.steps),
+                "steps": [
+                    {"description": step.description, "tool_hint": step.tool_hint} for step in plan.steps
+                ],
+            },
+        )
 
     async def _persist_new_turns(
         self,

@@ -91,6 +91,7 @@ including the alternatives considered and why they were rejected.
 | Deployment | `Dockerfile`, `docker-compose.yml`, `.github/workflows/` | [08-deployment.md](engineer-tutorial/08-deployment.md) |
 | CLI Client | `ai_platform/client/` | [09-cli-client.md](engineer-tutorial/09-cli-client.md) |
 | Sandbox | `ai_platform/sandbox/` | [10-sandbox.md](engineer-tutorial/10-sandbox.md) |
+| Planning | `ai_platform/planning/` | [11-planning.md](engineer-tutorial/11-planning.md) |
 
 ## Quickstart
 

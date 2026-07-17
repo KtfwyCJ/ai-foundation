@@ -3,6 +3,7 @@ import pytest
 from ai_platform.common.errors import ProviderTimeoutError, RuntimeToolLoopExceededError, ToolNotFoundError
 from ai_platform.common.schemas import ChatMessage, ChatRequest, ToolResultBlock, ToolUseBlock
 from ai_platform.memory.in_memory import InMemoryStore
+from ai_platform.planning.types import Plan, PlanStep
 from ai_platform.providers.types import ProviderResponse, ToolCall
 from ai_platform.runtime.engine import RuntimeEngine
 from ai_platform.sandbox.types import SandboxResult
@@ -415,3 +416,71 @@ async def test_handle_chat_records_an_error_span_when_tool_not_found():
     assert len(tool_spans) == 1
     assert tool_spans[0].attributes["tool"] == "not_a_real_tool"
     assert "not_a_real_tool" in tool_spans[0].error
+
+
+class FakePlanner:
+    """Stands in for a Planner — returns a scripted Plan, or raises, so
+    RuntimeEngine's observational-only planning step (record a span, never
+    affect the tool loop) can be tested without a real LLMPlanner/provider
+    call."""
+
+    def __init__(self, plan: Plan | None = None, error: Exception | None = None) -> None:
+        self._plan = plan or Plan()
+        self._error = error
+        self.calls: list[ChatRequest] = []
+
+    async def plan(self, request, tools):
+        self.calls.append(request)
+        if self._error is not None:
+            raise self._error
+        return self._plan
+
+
+async def test_handle_chat_records_a_planner_span_when_planner_present(fake_provider_response):
+    provider = FakeModelProvider(response=fake_provider_response)
+    tracer = InMemoryTracer()
+    plan = Plan(steps=[PlanStep(description="step one"), PlanStep(description="step two", tool_hint="calculator")])
+    planner = FakePlanner(plan=plan)
+    engine = RuntimeEngine(provider, tracer=tracer, planner=planner)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
+
+    await engine.handle_chat(request)
+
+    assert planner.calls == [request]
+    spans = await tracer.get_trace("conv-1")
+    plan_spans = [span for span in spans if span.name == "planner.plan"]
+    assert len(plan_spans) == 1
+    assert plan_spans[0].error is None
+    assert plan_spans[0].attributes["step_count"] == 2
+    assert plan_spans[0].attributes["steps"] == [
+        {"description": "step one", "tool_hint": None},
+        {"description": "step two", "tool_hint": "calculator"},
+    ]
+
+
+async def test_handle_chat_without_planner_never_calls_one(fake_provider_response):
+    provider = FakeModelProvider(response=fake_provider_response)
+    tracer = InMemoryTracer()
+    engine = RuntimeEngine(provider, tracer=tracer)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
+
+    await engine.handle_chat(request)
+
+    spans = await tracer.get_trace("conv-1")
+    assert all(span.name != "planner.plan" for span in spans)
+
+
+async def test_handle_chat_still_completes_when_planner_raises(fake_provider_response):
+    provider = FakeModelProvider(response=fake_provider_response)
+    tracer = InMemoryTracer()
+    planner = FakePlanner(error=ProviderTimeoutError("planning provider timed out"))
+    engine = RuntimeEngine(provider, tracer=tracer, planner=planner)
+    request = ChatRequest(messages=[ChatMessage(role="user", content="hi")], conversation_id="conv-1")
+
+    response = await engine.handle_chat(request)
+
+    assert response.message.content == "hi there"
+    spans = await tracer.get_trace("conv-1")
+    plan_spans = [span for span in spans if span.name == "planner.plan"]
+    assert len(plan_spans) == 1
+    assert "planning provider timed out" in plan_spans[0].error

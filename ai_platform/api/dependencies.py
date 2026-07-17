@@ -4,7 +4,10 @@ from ai_platform.common.config import get_settings
 from ai_platform.common.interfaces import RuntimeClient
 from ai_platform.memory.in_memory import InMemoryStore
 from ai_platform.memory.interfaces import MemoryStore
+from ai_platform.planning.interfaces import Planner
+from ai_platform.planning.llm_planner import LLMPlanner
 from ai_platform.providers.anthropic_provider import create_anthropic_provider
+from ai_platform.providers.interfaces import ModelProvider
 from ai_platform.runtime.engine import RuntimeEngine
 from ai_platform.sandbox.interfaces import Sandbox
 from ai_platform.sandbox.subprocess_sandbox import SubprocessSandbox
@@ -50,6 +53,16 @@ def get_sandbox() -> Sandbox:
     return SubprocessSandbox()
 
 
+def get_planner(provider: ModelProvider) -> Planner:
+    """The one place the concrete Planner backend is chosen. Takes the
+    already-constructed ModelProvider as a parameter — unlike its zero-arg
+    @lru_cache siblings — because LLMPlanner reuses the same provider
+    instance RuntimeEngine calls for real completions, rather than
+    constructing an independent one; caching it separately from
+    get_runtime_client (itself cached) would add nothing."""
+    return LLMPlanner(provider)
+
+
 @lru_cache
 def get_runtime_client() -> RuntimeClient:
     """The one place that wires a concrete Runtime implementation into the
@@ -57,5 +70,10 @@ def get_runtime_client() -> RuntimeClient:
     function — no route or middleware code depends on the concrete type."""
     provider = create_anthropic_provider(get_settings())
     return RuntimeEngine(
-        provider, get_tool_registry(), get_memory_store(), get_tracer(), get_sandbox()
+        provider,
+        get_tool_registry(),
+        get_memory_store(),
+        get_tracer(),
+        get_sandbox(),
+        get_planner(provider),
     )
