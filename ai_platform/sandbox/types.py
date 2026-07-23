@@ -12,6 +12,7 @@ class SandboxLimits:
     max_memory_mb: int = 256
 
 
+
 @dataclass(frozen=True)
 class SandboxResult:
     """What a Sandbox returns for a successful run — the tool's output plus
